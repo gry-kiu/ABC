@@ -19,215 +19,41 @@
 // 2021-09-21
 // modified by Choi, T. J.
 
-#include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
+#include "ABC.h"
 
 /* Control Parameters of ABC algorithm */
-int NP; /* The number of colony size (employed bees+onlooker bees) */
-int FoodNumber; /* The number of food sources equals the half of the colony size */
-int limit; /* A food source which could not be improved through "limit" trials is abandoned by its employed bee */
+static int NP; /* The number of colony size (employed bees+onlooker bees) */
+static int FoodNumber; /* The number of food sources equals the half of the colony size */
+static int limit; /* A food source which could not be improved through "limit" trials is abandoned by its employed bee */
 
 /* Problem specific variables */
-int D; /* The number of parameters of the problem to be optimized */
-double *lb; /* lower bound of the parameters. */
-double *ub; /* upper bound of the parameters. */
+static int D; /* The number of parameters of the problem to be optimized */
+static double *lb; /* lower bound of the parameters. */
+static double *ub; /* upper bound of the parameters. */
 
-double **Foods; /* Foods is the population of food sources. */ // shape=(FoodNumber, D)
-double *f; /* objective function values */ // shape=(FoodNumber,)
-double *fitness; /* fitness (quality) values */ // shape=(FoodNumber,)
-double *trial; /* trial numbers */ // shape=(FoodNumber,)
-double *prob; /* probabilities of food sources (solutions) to be chosen */ // shape=(FoodNumber,)
-double *solution; /* New solution (neighbor) produced by v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) j is a randomly chosen parameter and k is a randomly chosen solution different from i */ // shape=(D,)
-double GlobalMin; /* Optimum solution obtained by ABC algorithm */
-double *GlobalParams; /* Parameters of the optimum solution */ // shape=(D,)
+static double **Foods; /* Foods is the population of food sources. */ // shape=(FoodNumber, D)
+static double *f; /* objective function values */ // shape=(FoodNumber,)
+static double *fitness; /* fitness (quality) values */ // shape=(FoodNumber,)
+static double *trial; /* trial numbers */ // shape=(FoodNumber,)
+static double *prob; /* probabilities of food sources (solutions) to be chosen */ // shape=(FoodNumber,)
+static double *solution; /* New solution (neighbor) produced by v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) j is a randomly chosen parameter and k is a randomly chosen solution different from i */ // shape=(D,)
+static double GlobalMin; /* Optimum solution obtained by ABC algorithm */
+static double *GlobalParams; /* Parameters of the optimum solution */ // shape=(D,)
 
 /* a function pointer returning double and taking a D-dimensional array as argument */
 typedef double (*FunctionCallback)(double *const solution, const int D);
 
 /* Write your own objective function name instead of sphere */
-FunctionCallback function;
+static FunctionCallback function;
 
-/* Fitness function */
-double CalculateFitness(double fun) {
-  double result = 0;
-  if (fun >= 0) {
-    result = 1 / (fun + 1);
-  } else {
-    result = 1 + fabs(fun);
-  }
-  return result;
-}
-
-/* The best food source is memorized */
-void MemorizeBestSource() {
-  for (int i = 0; i < FoodNumber; i++) {
-    if (f[i] < GlobalMin) {
-      GlobalMin = f[i];
-      for (int j = 0; j < D; j++)
-        GlobalParams[j] = Foods[i][j];
-    }
-  }
-}
-
-/* Variables and counters are initialized */
-void init(int index) {
-  for (int j = 0; j < D; j++) {
-    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    Foods[index][j] = r * (ub[j] - lb[j]) + lb[j];
-    solution[j] = Foods[index][j];
-  }
-  f[index] = function(solution, D);
-  fitness[index] = CalculateFitness(f[index]);
-  trial[index] = 0;
-}
-
-/* All food sources are initialized */
-void initial() {
-  for (int i = 0; i < FoodNumber; i++) {
-    init(i);
-  }
-  GlobalMin = f[0];
-  for (int i = 0; i < D; i++)
-    GlobalParams[i] = Foods[0][i];
-}
-
-void SendEmployedBees() {
-  /* Employed Bee Phase */
-  for (int i = 0; i < FoodNumber; i++) {
-    /* The parameter to be changed is determined randomly */
-    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    int param2change = (int)(r * D);
-
-    /* A randomly chosen solution is used in producing a mutant solution of the solution i */
-    r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    int neighbor = (int)(r * FoodNumber);
-
-    /* Randomly selected solution must be different from the solution i */
-    while (neighbor == i) {
-      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      neighbor = (int)(r * FoodNumber);
-    }
-    for (int j = 0; j < D; j++)
-      solution[j] = Foods[i][j];
-
-    /* v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) */
-    r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    solution[param2change] = Foods[i][param2change] + (Foods[i][param2change] - Foods[neighbor][param2change]) * (r - 0.5) * 2;
-
-    /* if generated parameter value is out of boundaries, it is shifted onto the boundaries */
-    for (int j = 0; j < D; j++) {
-      if (solution[param2change] < lb[j])
-        solution[param2change] = lb[j];
-      if (solution[param2change] > ub[j])
-        solution[param2change] = ub[j];
-    }
-    double ObjValSol = function(solution, D);
-    double FitnessSol = CalculateFitness(ObjValSol);
-
-    /* a greedy selection is applied between the current solution i and its mutant */
-    if (FitnessSol > fitness[i]) {
-      /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the trial counter of solution i */
-      trial[i] = 0;
-      for (int j = 0; j < D; j++)
-        Foods[i][j] = solution[j];
-      f[i] = ObjValSol;
-      fitness[i] = FitnessSol;
-    } else { /* if the solution i can not be improved, increase its trial counter */
-      trial[i] = trial[i] + 1;
-    }
-  }
-
-  /* end of employed bee phase */
-}
-
-/* A food source is chosen with the probability which is proportional to its quality */
-void CalculateProbabilities() {
-  int i;
-  double maxfit;
-  maxfit = fitness[0];
-  for (i = 1; i < FoodNumber; i++) {
-    if (fitness[i] > maxfit)
-      maxfit = fitness[i];
-  }
-
-  for (i = 0; i < FoodNumber; i++) {
-    prob[i] = (0.9 * (fitness[i] / maxfit)) + 0.1;
-  }
-}
-
-void SendOnlookerBees() {
-  int i = 0;
-  int t = 0;
-  /* onlooker Bee Phase */
-  while (t < FoodNumber) {
-    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    /* choose a food source depending on its probability to be chosen */
-    if (r < prob[i]) {
-      t++;
-
-      /* The parameter to be changed is determined randomly */
-      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      int param2change = (int)(r * D);
-
-      /* A randomly chosen solution is used in producing a mutant solution of the solution i */
-      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      int neighbor = (int)(r * FoodNumber);
-
-      /* Randomly selected solution must be different from the solution i */
-      while (neighbor == i) {
-        r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-        neighbor = (int)(r * FoodNumber);
-      }
-      for (int j = 0; j < D; j++)
-        solution[j] = Foods[i][j];
-
-      /* v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) */
-      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      solution[param2change] = Foods[i][param2change] + (Foods[i][param2change] - Foods[neighbor][param2change]) * (r - 0.5) * 2;
-
-      /* if generated parameter value is out of boundaries, it is shifted onto the boundaries */
-      for (int j = 0; j < D; j++) {
-        if (solution[param2change] < lb[j])
-          solution[param2change] = lb[j];
-        if (solution[param2change] > ub[j])
-          solution[param2change] = ub[j];
-      }
-      double ObjValSol = function(solution, D);
-      double FitnessSol = CalculateFitness(ObjValSol);
-
-      /* a greedy selection is applied between the current solution i and its mutant */
-      if (FitnessSol > fitness[i]) {
-        /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the trial counter of solution i */
-        trial[i] = 0;
-        for (int j = 0; j < D; j++)
-          Foods[i][j] = solution[j];
-        f[i] = ObjValSol;
-        fitness[i] = FitnessSol;
-      } else { /* if the solution i can not be improved, increase its trial counter */
-        trial[i] = trial[i] + 1;
-      }
-    } /* if */
-    i++;
-    if (i == FoodNumber)
-      i = 0;
-  } /* while */
-
-  /* end of onlooker bee phase */
-}
-
-/* determine the food sources whose trial counter exceeds the "limit" value. */
-void SendScoutBees() {
-  int maxtrialindex = 0;
-  for (int i = 1; i < FoodNumber; i++) {
-    if (trial[i] > trial[maxtrialindex])
-      maxtrialindex = i;
-  }
-  if (trial[maxtrialindex] >= limit) {
-    init(maxtrialindex);
-  }
-}
+static double CalculateFitness(double fun);
+static void MemorizeBestSource();
+static void init(int index);
+static void initial();
+static void SendEmployedBees();
+static void CalculateProbabilities();
+static void SendOnlookerBees();
+static void SendScoutBees();
 
 void standard_ABC(const int gnty_s, const double *const intl_lwr_bnd, const double *const intl_uppr_bnd, const double *const srch_lwr_bnd, const double *const srch_uppr_bnd, double (*objective_function)(double *const solution, const int D), void (*callback_function)(const double GlobalMin, const double *const GlobalParams), const int evlt_mx, const int arg_NP, const int arg_FoodNumber, const int arg_limit) {
   // -------------------- initialization --------------------
@@ -298,4 +124,184 @@ void standard_ABC(const int gnty_s, const double *const intl_lwr_bnd, const doub
   free(prob);
   free(solution);
   free(GlobalParams);
+}
+
+/* Fitness function */
+static double CalculateFitness(double fun) {
+  double result = 0;
+  if (fun >= 0) {
+    result = 1 / (fun + 1);
+  } else {
+    result = 1 + fabs(fun);
+  }
+  return result;
+}
+
+/* The best food source is memorized */
+static void MemorizeBestSource() {
+  for (int i = 0; i < FoodNumber; i++) {
+    if (f[i] < GlobalMin) {
+      GlobalMin = f[i];
+      for (int j = 0; j < D; j++)
+        GlobalParams[j] = Foods[i][j];
+    }
+  }
+}
+
+/* Variables and counters are initialized */
+static void init(int index) {
+  for (int j = 0; j < D; j++) {
+    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+    Foods[index][j] = r * (ub[j] - lb[j]) + lb[j];
+    solution[j] = Foods[index][j];
+  }
+  f[index] = function(solution, D);
+  fitness[index] = CalculateFitness(f[index]);
+  trial[index] = 0;
+}
+
+/* All food sources are initialized */
+static void initial() {
+  for (int i = 0; i < FoodNumber; i++) {
+    init(i);
+  }
+  GlobalMin = f[0];
+  for (int i = 0; i < D; i++)
+    GlobalParams[i] = Foods[0][i];
+}
+
+static void SendEmployedBees() {
+  /* Employed Bee Phase */
+  for (int i = 0; i < FoodNumber; i++) {
+    /* The parameter to be changed is determined randomly */
+    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+    int param2change = (int)(r * D);
+
+    /* A randomly chosen solution is used in producing a mutant solution of the solution i */
+    r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+    int neighbor = (int)(r * FoodNumber);
+
+    /* Randomly selected solution must be different from the solution i */
+    while (neighbor == i) {
+      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+      neighbor = (int)(r * FoodNumber);
+    }
+    for (int j = 0; j < D; j++)
+      solution[j] = Foods[i][j];
+
+    /* v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) */
+    r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+    solution[param2change] = Foods[i][param2change] + (Foods[i][param2change] - Foods[neighbor][param2change]) * (r - 0.5) * 2;
+
+    /* if generated parameter value is out of boundaries, it is shifted onto the boundaries */
+    for (int j = 0; j < D; j++) {
+      if (solution[param2change] < lb[j])
+        solution[param2change] = lb[j];
+      if (solution[param2change] > ub[j])
+        solution[param2change] = ub[j];
+    }
+    double ObjValSol = function(solution, D);
+    double FitnessSol = CalculateFitness(ObjValSol);
+
+    /* a greedy selection is applied between the current solution i and its mutant */
+    if (FitnessSol > fitness[i]) {
+      /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the trial counter of solution i */
+      trial[i] = 0;
+      for (int j = 0; j < D; j++)
+        Foods[i][j] = solution[j];
+      f[i] = ObjValSol;
+      fitness[i] = FitnessSol;
+    } else { /* if the solution i can not be improved, increase its trial counter */
+      trial[i] = trial[i] + 1;
+    }
+  }
+
+  /* end of employed bee phase */
+}
+
+/* A food source is chosen with the probability which is proportional to its quality */
+static void CalculateProbabilities() {
+  int i;
+  double maxfit;
+  maxfit = fitness[0];
+  for (i = 1; i < FoodNumber; i++) {
+    if (fitness[i] > maxfit)
+      maxfit = fitness[i];
+  }
+
+  for (i = 0; i < FoodNumber; i++) {
+    prob[i] = (0.9 * (fitness[i] / maxfit)) + 0.1;
+  }
+}
+
+static void SendOnlookerBees() {
+  int i = 0;
+  int t = 0;
+  /* onlooker Bee Phase */
+  while (t < FoodNumber) {
+    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+    /* choose a food source depending on its probability to be chosen */
+    if (r < prob[i]) {
+      t++;
+
+      /* The parameter to be changed is determined randomly */
+      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+      int param2change = (int)(r * D);
+
+      /* A randomly chosen solution is used in producing a mutant solution of the solution i */
+      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+      int neighbor = (int)(r * FoodNumber);
+
+      /* Randomly selected solution must be different from the solution i */
+      while (neighbor == i) {
+        r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+        neighbor = (int)(r * FoodNumber);
+      }
+      for (int j = 0; j < D; j++)
+        solution[j] = Foods[i][j];
+
+      /* v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) */
+      r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+      solution[param2change] = Foods[i][param2change] + (Foods[i][param2change] - Foods[neighbor][param2change]) * (r - 0.5) * 2;
+
+      /* if generated parameter value is out of boundaries, it is shifted onto the boundaries */
+      for (int j = 0; j < D; j++) {
+        if (solution[param2change] < lb[j])
+          solution[param2change] = lb[j];
+        if (solution[param2change] > ub[j])
+          solution[param2change] = ub[j];
+      }
+      double ObjValSol = function(solution, D);
+      double FitnessSol = CalculateFitness(ObjValSol);
+
+      /* a greedy selection is applied between the current solution i and its mutant */
+      if (FitnessSol > fitness[i]) {
+        /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the trial counter of solution i */
+        trial[i] = 0;
+        for (int j = 0; j < D; j++)
+          Foods[i][j] = solution[j];
+        f[i] = ObjValSol;
+        fitness[i] = FitnessSol;
+      } else { /* if the solution i can not be improved, increase its trial counter */
+        trial[i] = trial[i] + 1;
+      }
+    } /* if */
+    i++;
+    if (i == FoodNumber)
+      i = 0;
+  } /* while */
+
+  /* end of onlooker bee phase */
+}
+
+/* determine the food sources whose trial counter exceeds the "limit" value. */
+static void SendScoutBees() {
+  int maxtrialindex = 0;
+  for (int i = 1; i < FoodNumber; i++) {
+    if (trial[i] > trial[maxtrialindex])
+      maxtrialindex = i;
+  }
+  if (trial[maxtrialindex] >= limit) {
+    init(maxtrialindex);
+  }
 }
