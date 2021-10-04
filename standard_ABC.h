@@ -1,3 +1,6 @@
+// ABC algorithm
+// modified by Choi, T. J.
+
 /* ABC algorithm coded using C programming language */
 
 /* Artificial Bee Colony (ABC) is one of the most recently defined algorithms by Dervis Karaboga in 2005, motivated by the intelligent behavior of honey bees. */
@@ -16,18 +19,12 @@
    Bahriye Basturk Akay (bahriye@erciyes.edu.tr)
 */
 
-// 2021-09-21
-// modified by Choi, T. J.
-
 #ifndef ABC_H
 #define ABC_H
 
 #include <math.h>
 #include <stdlib.h>
 
-/* a function pointer returning double and taking a D-dimensional array as argument */
-typedef double (*FunctionCallback)(double *const solution, const int D);
-
-void standard_ABC(const int gnty_s, const double *const intl_lwr_bnd, const double *const intl_uppr_bnd, const double *const srch_lwr_bnd, const double *const srch_uppr_bnd, double (*objective_function)(double *const solution, const int D), void (*callback_function)(const double GlobalMin, const double *const GlobalParams), const int evlt_mx, const int arg_NP, const int arg_FoodNumber, const int arg_limit);
+void standard_ABC(const int D, const double *const lb_init, const double *const ub_init, const double *const lb_iter, const double *const ub_iter, double (*objective)(const double *const solution, const int D), void (*callback)(const double GlobalMin, const double *const GlobalParams), const int max_function_evaluations, const int NP, const int FoodNumber, const double limit);
 
 #endif

@@ -1,3 +1,6 @@
+// ABC algorithm
+// modified by Choi, T. J.
+
 /* ABC algorithm coded using C programming language */
 
 /* Artificial Bee Colony (ABC) is one of the most recently defined algorithms by Dervis Karaboga in 2005, motivated by the intelligent behavior of honey bees. */
@@ -16,35 +19,29 @@
    Bahriye Basturk Akay (bahriye@erciyes.edu.tr)
 */
 
-// 2021-09-21
-// modified by Choi, T. J.
-
 #include "standard_ABC.h"
 
 /* Control Parameters of ABC algorithm */
-static int NP; /* The number of colony size (employed bees+onlooker bees) */
-static int FoodNumber; /* The number of food sources equals the half of the colony size */
-static int limit; /* A food source which could not be improved through "limit" trials is abandoned by its employed bee */
+static int g_NP; /* The number of colony size (employed bees+onlooker bees) */
+static int g_FoodNumber; /* The number of food sources equals the half of the colony size */
+static int g_limit; /* A food source which could not be improved through "g_limit" trials is abandoned by its employed bee */
 
 /* Problem specific variables */
-static int D; /* The number of parameters of the problem to be optimized */
-static double *lb; /* lower bound of the parameters. */
-static double *ub; /* upper bound of the parameters. */
+static int g_D; /* The number of parameters of the problem to be optimized */
+static const double *g_lb; /* lower bound of the parameters. */
+static const double *g_ub; /* upper bound of the parameters. */
 
-static double **Foods; /* Foods is the population of food sources. */ // shape=(FoodNumber, D)
-static double *f; /* objective function values */ // shape=(FoodNumber,)
-static double *fitness; /* fitness (quality) values */ // shape=(FoodNumber,)
-static double *trial; /* trial numbers */ // shape=(FoodNumber,)
-static double *prob; /* probabilities of food sources (solutions) to be chosen */ // shape=(FoodNumber,)
-static double *solution; /* New solution (neighbor) produced by v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) j is a randomly chosen parameter and k is a randomly chosen solution different from i */ // shape=(D,)
-static double GlobalMin; /* Optimum solution obtained by ABC algorithm */
-static double *GlobalParams; /* Parameters of the optimum solution */ // shape=(D,)
-
-/* a function pointer returning double and taking a D-dimensional array as argument */
-typedef double (*FunctionCallback)(double *const solution, const int D);
+static double **g_Foods; /* g_Foods is the population of food sources. */ // shape=(g_FoodNumber, g_D)
+static double *g_f; /* objective function values */ // shape=(g_FoodNumber,)
+static double *g_fitness; /* g_fitness (quality) values */ // shape=(g_FoodNumber,)
+static double *g_trial; /* g_trial numbers */ // shape=(g_FoodNumber,)
+static double *g_prob; /* probabilities of food sources (solutions) to be chosen */ // shape=(g_FoodNumber,)
+static double *g_solution; /* New g_solution (neighbor) produced by v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) j is a randomly chosen parameter and k is a randomly chosen g_solution different from i */ // shape=(g_D,)
+static double g_GlobalMin; /* Optimum g_solution obtained by ABC algorithm */
+static double *g_GlobalParams; /* Parameters of the optmum g_solution */ // shape=(g_D,)
 
 /* Write your own objective function name instead of sphere */
-static FunctionCallback function;
+static double (*g_objective)(const double *const solution, const int D);
 
 static double CalculateFitness(double fun);
 static void MemorizeBestSource();
@@ -55,75 +52,64 @@ static void CalculateProbabilities();
 static void SendOnlookerBees();
 static void SendScoutBees();
 
-void standard_ABC(const int gnty_s, const double *const intl_lwr_bnd, const double *const intl_uppr_bnd, const double *const srch_lwr_bnd, const double *const srch_uppr_bnd, double (*objective_function)(double *const solution, const int D), void (*callback_function)(const double GlobalMin, const double *const GlobalParams), const int evlt_mx, const int arg_NP, const int arg_FoodNumber, const int arg_limit) {
-  // -------------------- initialization --------------------
+void standard_ABC(const int D, const double *const lb_init, const double *const ub_init, const double *const lb_iter, const double *const ub_iter, double (*objective)(const double *const solution, const int D), void (*callback)(const double GlobalMin, const double *const GlobalParams), const int max_function_evaluations, const int NP, const int FoodNumber, const double limit) {
+  // ------------------------------------------------------------
+  // initialization ---------------------------------------------
+  // ------------------------------------------------------------
 
-  int evlt_c = 0;
+  g_D = D;
+  g_lb = lb_init;
+  g_ub = ub_init;
+  g_objective = objective;
+  g_NP = NP;
+  g_FoodNumber = FoodNumber;
+  g_limit = limit;
 
-  NP = arg_NP;
-  FoodNumber = arg_FoodNumber;
-  limit = arg_limit;
-
-  function = objective_function;
-
-  D = gnty_s;
-  lb = (double *)malloc(sizeof(double) * D);
-  ub = (double *)malloc(sizeof(double) * D);
-  for (int i = 0; i < D; i++) {
-    lb[i] = intl_lwr_bnd[i];
-    ub[i] = intl_uppr_bnd[i];
-  }
-
-  Foods = (double **)malloc(sizeof(double *) * FoodNumber);
+  g_Foods = (double **)malloc(sizeof(double *) * FoodNumber);
   for (int i = 0; i < FoodNumber; i++) {
-    Foods[i] = (double *)malloc(sizeof(double) * D);
+    g_Foods[i] = (double *)malloc(sizeof(double) * D);
   }
-  f = (double *)malloc(sizeof(double) * FoodNumber);
-  fitness = (double *)malloc(sizeof(double) * FoodNumber);
-  trial = (double *)malloc(sizeof(double) * FoodNumber);
-  prob = (double *)malloc(sizeof(double) * FoodNumber);
-  solution = (double *)malloc(sizeof(double) * D);
-  GlobalParams = (double *)malloc(sizeof(double) * D);
-
-  // -------------------- main procedure --------------------
+  g_f = (double *)malloc(sizeof(double) * FoodNumber);
+  g_fitness = (double *)malloc(sizeof(double) * FoodNumber);
+  g_trial = (double *)malloc(sizeof(double) * FoodNumber);
+  g_prob = (double *)malloc(sizeof(double) * FoodNumber);
+  g_solution = (double *)malloc(sizeof(double) * D);
+  g_GlobalParams = (double *)malloc(sizeof(double) * D);
 
   initial();
+  int function_evaluation = FoodNumber;
   MemorizeBestSource();
 
-  for (int i = 0; i < D; i++) {
-    lb[i] = srch_lwr_bnd[i];
-    ub[i] = srch_uppr_bnd[i];
-  }
+  // ------------------------------------------------------------
+  // iteration --------------------------------------------------
+  // ------------------------------------------------------------
 
-  while (evlt_c < evlt_mx) {
+  g_lb = lb_iter;
+  g_ub = ub_iter;
+  while (function_evaluation < max_function_evaluations) {
     SendEmployedBees();
-    evlt_c += FoodNumber;
+    function_evaluation += FoodNumber;
     CalculateProbabilities();
     SendOnlookerBees();
-    evlt_c += FoodNumber;
+    function_evaluation += FoodNumber;
     MemorizeBestSource();
     SendScoutBees();
   }
 
-  if (callback_function) {
-    callback_function(GlobalMin, GlobalParams);
+  if (callback) {
+    callback(g_GlobalMin, g_GlobalParams);
   }
 
-  // -------------------- termination --------------------
-
-  free(lb);
-  free(ub);
-
-  for (int i = 0; i < FoodNumber; i++) {
-    free(Foods[i]);
+  for (int i = 0; i < g_FoodNumber; i++) {
+    free(g_Foods[i]);
   }
-  free(Foods);
-  free(f);
-  free(fitness);
-  free(trial);
-  free(prob);
-  free(solution);
-  free(GlobalParams);
+  free(g_Foods);
+  free(g_f);
+  free(g_fitness);
+  free(g_trial);
+  free(g_prob);
+  free(g_solution);
+  free(g_GlobalParams);
 }
 
 /* Fitness function */
@@ -139,80 +125,80 @@ static double CalculateFitness(double fun) {
 
 /* The best food source is memorized */
 static void MemorizeBestSource() {
-  for (int i = 0; i < FoodNumber; i++) {
-    if (f[i] < GlobalMin) {
-      GlobalMin = f[i];
-      for (int j = 0; j < D; j++)
-        GlobalParams[j] = Foods[i][j];
+  for (int i = 0; i < g_FoodNumber; i++) {
+    if (g_f[i] < g_GlobalMin) {
+      g_GlobalMin = g_f[i];
+      for (int j = 0; j < g_D; j++)
+        g_GlobalParams[j] = g_Foods[i][j];
     }
   }
 }
 
 /* Variables and counters are initialized */
 static void init(int index) {
-  for (int j = 0; j < D; j++) {
+  for (int j = 0; j < g_D; j++) {
     double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    Foods[index][j] = r * (ub[j] - lb[j]) + lb[j];
-    solution[j] = Foods[index][j];
+    g_Foods[index][j] = r * (g_ub[j] - g_lb[j]) + g_lb[j];
+    g_solution[j] = g_Foods[index][j];
   }
-  f[index] = function(solution, D);
-  fitness[index] = CalculateFitness(f[index]);
-  trial[index] = 0;
+  g_f[index] = g_objective(g_solution, g_D);
+  g_fitness[index] = CalculateFitness(g_f[index]);
+  g_trial[index] = 0;
 }
 
 /* All food sources are initialized */
 static void initial() {
-  for (int i = 0; i < FoodNumber; i++) {
+  for (int i = 0; i < g_FoodNumber; i++) {
     init(i);
   }
-  GlobalMin = f[0];
-  for (int i = 0; i < D; i++)
-    GlobalParams[i] = Foods[0][i];
+  g_GlobalMin = g_f[0];
+  for (int i = 0; i < g_D; i++)
+    g_GlobalParams[i] = g_Foods[0][i];
 }
 
 static void SendEmployedBees() {
   /* Employed Bee Phase */
-  for (int i = 0; i < FoodNumber; i++) {
+  for (int i = 0; i < g_FoodNumber; i++) {
     /* The parameter to be changed is determined randomly */
     double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    int param2change = (int)(r * D);
+    int param2change = (int)(r * g_D);
 
-    /* A randomly chosen solution is used in producing a mutant solution of the solution i */
+    /* A randomly chosen g_solution is used in producing a mutant g_solution of the g_solution i */
     r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    int neighbor = (int)(r * FoodNumber);
+    int neighbor = (int)(r * g_FoodNumber);
 
-    /* Randomly selected solution must be different from the solution i */
+    /* Randomly selected g_solution must be different from the g_solution i */
     while (neighbor == i) {
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      neighbor = (int)(r * FoodNumber);
+      neighbor = (int)(r * g_FoodNumber);
     }
-    for (int j = 0; j < D; j++)
-      solution[j] = Foods[i][j];
+    for (int j = 0; j < g_D; j++)
+      g_solution[j] = g_Foods[i][j];
 
     /* v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) */
     r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    solution[param2change] = Foods[i][param2change] + (Foods[i][param2change] - Foods[neighbor][param2change]) * (r - 0.5) * 2;
+    g_solution[param2change] = g_Foods[i][param2change] + (g_Foods[i][param2change] - g_Foods[neighbor][param2change]) * (r - 0.5) * 2;
 
     /* if generated parameter value is out of boundaries, it is shifted onto the boundaries */
-    for (int j = 0; j < D; j++) {
-      if (solution[param2change] < lb[j])
-        solution[param2change] = lb[j];
-      if (solution[param2change] > ub[j])
-        solution[param2change] = ub[j];
+    for (int j = 0; j < g_D; j++) {
+      if (g_solution[param2change] < g_lb[j])
+        g_solution[param2change] = g_lb[j];
+      if (g_solution[param2change] > g_ub[j])
+        g_solution[param2change] = g_ub[j];
     }
-    double ObjValSol = function(solution, D);
+    double ObjValSol = g_objective(g_solution, g_D);
     double FitnessSol = CalculateFitness(ObjValSol);
 
-    /* a greedy selection is applied between the current solution i and its mutant */
-    if (FitnessSol > fitness[i]) {
-      /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the trial counter of solution i */
-      trial[i] = 0;
-      for (int j = 0; j < D; j++)
-        Foods[i][j] = solution[j];
-      f[i] = ObjValSol;
-      fitness[i] = FitnessSol;
-    } else { /* if the solution i can not be improved, increase its trial counter */
-      trial[i] = trial[i] + 1;
+    /* a greedy selection is applied between the current g_solution i and its mutant */
+    if (FitnessSol > g_fitness[i]) {
+      /* If the mutant g_solution is better than the current g_solution i, replace the g_solution with the mutant and reset the g_trial counter of g_solution i */
+      g_trial[i] = 0;
+      for (int j = 0; j < g_D; j++)
+        g_Foods[i][j] = g_solution[j];
+      g_f[i] = ObjValSol;
+      g_fitness[i] = FitnessSol;
+    } else { /* if the g_solution i can not be improved, increase its g_trial counter */
+      g_trial[i] = g_trial[i] + 1;
     }
   }
 
@@ -221,16 +207,14 @@ static void SendEmployedBees() {
 
 /* A food source is chosen with the probability which is proportional to its quality */
 static void CalculateProbabilities() {
-  int i;
-  double maxfit;
-  maxfit = fitness[0];
-  for (i = 1; i < FoodNumber; i++) {
-    if (fitness[i] > maxfit)
-      maxfit = fitness[i];
+  double maxfit = g_fitness[0];
+  for (int i = 1; i < g_FoodNumber; i++) {
+    if (g_fitness[i] > maxfit)
+      maxfit = g_fitness[i];
   }
 
-  for (i = 0; i < FoodNumber; i++) {
-    prob[i] = (0.9 * (fitness[i] / maxfit)) + 0.1;
+  for (int i = 0; i < g_FoodNumber; i++) {
+    g_prob[i] = (0.9 * (g_fitness[i] / maxfit)) + 0.1;
   }
 }
 
@@ -238,70 +222,70 @@ static void SendOnlookerBees() {
   int i = 0;
   int t = 0;
   /* onlooker Bee Phase */
-  while (t < FoodNumber) {
+  while (t < g_FoodNumber) {
     double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
     /* choose a food source depending on its probability to be chosen */
-    if (r < prob[i]) {
+    if (r < g_prob[i]) {
       t++;
 
       /* The parameter to be changed is determined randomly */
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      int param2change = (int)(r * D);
+      int param2change = (int)(r * g_D);
 
-      /* A randomly chosen solution is used in producing a mutant solution of the solution i */
+      /* A randomly chosen g_solution is used in producing a mutant g_solution of the g_solution i */
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      int neighbor = (int)(r * FoodNumber);
+      int neighbor = (int)(r * g_FoodNumber);
 
-      /* Randomly selected solution must be different from the solution i */
+      /* Randomly selected g_solution must be different from the g_solution i */
       while (neighbor == i) {
         r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-        neighbor = (int)(r * FoodNumber);
+        neighbor = (int)(r * g_FoodNumber);
       }
-      for (int j = 0; j < D; j++)
-        solution[j] = Foods[i][j];
+      for (int j = 0; j < g_D; j++)
+        g_solution[j] = g_Foods[i][j];
 
       /* v_{ij}=x_{ij}+\phi_{ij}*(x_{kj}-x_{ij}) */
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      solution[param2change] = Foods[i][param2change] + (Foods[i][param2change] - Foods[neighbor][param2change]) * (r - 0.5) * 2;
+      g_solution[param2change] = g_Foods[i][param2change] + (g_Foods[i][param2change] - g_Foods[neighbor][param2change]) * (r - 0.5) * 2;
 
       /* if generated parameter value is out of boundaries, it is shifted onto the boundaries */
-      for (int j = 0; j < D; j++) {
-        if (solution[param2change] < lb[j])
-          solution[param2change] = lb[j];
-        if (solution[param2change] > ub[j])
-          solution[param2change] = ub[j];
+      for (int j = 0; j < g_D; j++) {
+        if (g_solution[param2change] < g_lb[j])
+          g_solution[param2change] = g_lb[j];
+        if (g_solution[param2change] > g_ub[j])
+          g_solution[param2change] = g_ub[j];
       }
-      double ObjValSol = function(solution, D);
+      double ObjValSol = g_objective(g_solution, g_D);
       double FitnessSol = CalculateFitness(ObjValSol);
 
-      /* a greedy selection is applied between the current solution i and its mutant */
-      if (FitnessSol > fitness[i]) {
-        /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the trial counter of solution i */
-        trial[i] = 0;
-        for (int j = 0; j < D; j++)
-          Foods[i][j] = solution[j];
-        f[i] = ObjValSol;
-        fitness[i] = FitnessSol;
-      } else { /* if the solution i can not be improved, increase its trial counter */
-        trial[i] = trial[i] + 1;
+      /* a greedy selection is applied between the current g_solution i and its mutant */
+      if (FitnessSol > g_fitness[i]) {
+        /* If the mutant g_solution is better than the current g_solution i, replace the g_solution with the mutant and reset the g_trial counter of g_solution i */
+        g_trial[i] = 0;
+        for (int j = 0; j < g_D; j++)
+          g_Foods[i][j] = g_solution[j];
+        g_f[i] = ObjValSol;
+        g_fitness[i] = FitnessSol;
+      } else { /* if the g_solution i can not be improved, increase its g_trial counter */
+        g_trial[i] = g_trial[i] + 1;
       }
     } /* if */
     i++;
-    if (i == FoodNumber)
+    if (i == g_FoodNumber)
       i = 0;
   } /* while */
 
   /* end of onlooker bee phase */
 }
 
-/* determine the food sources whose trial counter exceeds the "limit" value. */
+/* determine the food sources whose g_trial counter exceeds the "g_limit" value. */
 static void SendScoutBees() {
   int maxtrialindex = 0;
-  for (int i = 1; i < FoodNumber; i++) {
-    if (trial[i] > trial[maxtrialindex])
+  for (int i = 1; i < g_FoodNumber; i++) {
+    if (g_trial[i] > g_trial[maxtrialindex])
       maxtrialindex = i;
   }
-  if (trial[maxtrialindex] >= limit) {
+  if (g_trial[maxtrialindex] >= g_limit) {
     init(maxtrialindex);
   }
 }
