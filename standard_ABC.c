@@ -163,11 +163,11 @@ static void SendEmployedBees() {
     double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
     const int param2change = (int)(r * g_D);
 
-    /* A randomly chosen g_solution is used in producing a mutant g_solution of the g_solution i */
+    /* A randomly chosen solution is used in producing a mutant solution of the solution i */
     r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
     int neighbor = (int)(r * g_FoodNumber);
 
-    /* Randomly selected g_solution must be different from the g_solution i */
+    /* Randomly selected solution must be different from the solution i */
     while (neighbor == i) {
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
       neighbor = (int)(r * g_FoodNumber);
@@ -189,15 +189,15 @@ static void SendEmployedBees() {
     const double ObjValSol = g_objective(g_solution, g_D);
     const double FitnessSol = CalculateFitness(ObjValSol);
 
-    /* a greedy selection is applied between the current g_solution i and its mutant */
+    /* a greedy selection is applied between the current solution i and its mutant */
     if (FitnessSol > g_fitness[i]) {
-      /* If the mutant g_solution is better than the current g_solution i, replace the g_solution with the mutant and reset the g_trial counter of g_solution i */
+      /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the g_trial counter of solution i */
       g_trial[i] = 0;
       for (int j = 0; j < g_D; j++)
         g_Foods[i][j] = g_solution[j];
       g_f[i] = ObjValSol;
       g_fitness[i] = FitnessSol;
-    } else { /* if the g_solution i can not be improved, increase its g_trial counter */
+    } else { /* if the solution i cannot be improved, increase its g_trial counter */
       g_trial[i] = g_trial[i] + 1;
     }
   }
@@ -232,11 +232,11 @@ static void SendOnlookerBees() {
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
       const int param2change = (int)(r * g_D);
 
-      /* A randomly chosen g_solution is used in producing a mutant g_solution of the g_solution i */
+      /* A randomly chosen solution is used in producing a mutant solution of the solution i */
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
       int neighbor = (int)(r * g_FoodNumber);
 
-      /* Randomly selected g_solution must be different from the g_solution i */
+      /* Randomly selected solution must be different from the solution i */
       while (neighbor == i) {
         r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
         neighbor = (int)(r * g_FoodNumber);
@@ -258,15 +258,15 @@ static void SendOnlookerBees() {
       const double ObjValSol = g_objective(g_solution, g_D);
       const double FitnessSol = CalculateFitness(ObjValSol);
 
-      /* a greedy selection is applied between the current g_solution i and its mutant */
+      /* a greedy selection is applied between the current solution i and its mutant */
       if (FitnessSol > g_fitness[i]) {
-        /* If the mutant g_solution is better than the current g_solution i, replace the g_solution with the mutant and reset the g_trial counter of g_solution i */
+        /* If the mutant solution is better than the current solution i, replace the solution with the mutant and reset the g_trial counter of solution i */
         g_trial[i] = 0;
         for (int j = 0; j < g_D; j++)
           g_Foods[i][j] = g_solution[j];
         g_f[i] = ObjValSol;
         g_fitness[i] = FitnessSol;
-      } else { /* if the g_solution i can not be improved, increase its g_trial counter */
+      } else { /* if the solution i cannot be improved, increase its g_trial counter */
         g_trial[i] = g_trial[i] + 1;
       }
     } /* if */
