@@ -34,8 +34,8 @@ void callback(const double GlobalMin, const double *const GlobalParams);
 int main(int argc, char *argv[]) {
   srand(time(NULL));
   const int D = 30;
-  double *lb = (double *)malloc(sizeof(double) * D);
-  double *ub = (double *)malloc(sizeof(double) * D);
+  double *const lb = (double *)malloc(sizeof(double) * D);
+  double *const ub = (double *)malloc(sizeof(double) * D);
   for (int i = 0; i < D; i++) {
     lb[i] = -100.0;
     ub[i] = 100.0;

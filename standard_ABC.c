@@ -100,7 +100,7 @@ void standard_ABC(const int D, const double *const lb_init, const double *const 
     callback(g_GlobalMin, g_GlobalParams);
   }
 
-  for (int i = 0; i < g_FoodNumber; i++) {
+  for (int i = 0; i < FoodNumber; i++) {
     free(g_Foods[i]);
   }
   free(g_Foods);
@@ -137,7 +137,7 @@ static void MemorizeBestSource() {
 /* Variables and counters are initialized */
 static void init(int index) {
   for (int j = 0; j < g_D; j++) {
-    double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
+    const double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
     g_Foods[index][j] = r * (g_ub[j] - g_lb[j]) + g_lb[j];
     g_solution[j] = g_Foods[index][j];
   }
@@ -161,7 +161,7 @@ static void SendEmployedBees() {
   for (int i = 0; i < g_FoodNumber; i++) {
     /* The parameter to be changed is determined randomly */
     double r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-    int param2change = (int)(r * g_D);
+    const int param2change = (int)(r * g_D);
 
     /* A randomly chosen g_solution is used in producing a mutant g_solution of the g_solution i */
     r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
@@ -186,8 +186,8 @@ static void SendEmployedBees() {
       if (g_solution[param2change] > g_ub[j])
         g_solution[param2change] = g_ub[j];
     }
-    double ObjValSol = g_objective(g_solution, g_D);
-    double FitnessSol = CalculateFitness(ObjValSol);
+    const double ObjValSol = g_objective(g_solution, g_D);
+    const double FitnessSol = CalculateFitness(ObjValSol);
 
     /* a greedy selection is applied between the current g_solution i and its mutant */
     if (FitnessSol > g_fitness[i]) {
@@ -230,7 +230,7 @@ static void SendOnlookerBees() {
 
       /* The parameter to be changed is determined randomly */
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
-      int param2change = (int)(r * g_D);
+      const int param2change = (int)(r * g_D);
 
       /* A randomly chosen g_solution is used in producing a mutant g_solution of the g_solution i */
       r = ((double)rand() / ((double)(RAND_MAX) + (double)(1)));
@@ -255,8 +255,8 @@ static void SendOnlookerBees() {
         if (g_solution[param2change] > g_ub[j])
           g_solution[param2change] = g_ub[j];
       }
-      double ObjValSol = g_objective(g_solution, g_D);
-      double FitnessSol = CalculateFitness(ObjValSol);
+      const double ObjValSol = g_objective(g_solution, g_D);
+      const double FitnessSol = CalculateFitness(ObjValSol);
 
       /* a greedy selection is applied between the current g_solution i and its mutant */
       if (FitnessSol > g_fitness[i]) {
